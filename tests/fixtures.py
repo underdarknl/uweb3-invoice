@@ -1,6 +1,7 @@
 from datetime import date
 
 import pytest
+import requests
 from uweb3 import SettingsManager
 from uweb3.libs.sqltalk import mysql
 
@@ -19,9 +20,12 @@ __all__ = [
     "create_invoice_object",
     "default_invoice_and_products",
     "mollie_gateway",
+    "session",
+    "url",
 ]
 
 current_year = date.today().year
+url = "http://127.0.0.1:8001"
 
 
 @pytest.fixture
@@ -136,6 +140,9 @@ def create_invoice_object(connection, client_object, companydetails_object):
                 "description": "test",
                 "client": client_object["ID"],
                 "status": status,
+                "pro_forma": True
+                if status == invoice_model.InvoiceStatus.RESERVATION.value
+                else False,
             },
         )
 
@@ -149,7 +156,13 @@ def default_invoice_and_products(create_invoice_object):
     ) -> invoice_model.Invoice:
         invoice = create_invoice_object(status=status)
         products = [
-            {"name": "dakpan", "price": 25, "vat_percentage": 10, "quantity": 10},
+            {
+                "name": "dakpan",
+                "price": 25,
+                "vat_percentage": 10,
+                "sku": 1,
+                "quantity": 10,
+            },
         ]
         invoice.AddProducts(products)
         return invoice
@@ -168,6 +181,18 @@ def mollie_gateway(connection, mollie_config, default_invoice_and_products):
             "amount": 50,
             "status": mollie_helpers.MollieStatus.OPEN.value,
             "description": "payment_test",
+            "secret": "testsecret",
         },
     )
     return mollie_helpers.mollie_factory(connection, mollie_config)
+
+
+@pytest.fixture(scope="function")
+def session():
+    session = requests.Session()
+    session.post(
+        url + "/login",
+        data={"email": "admin@underdark.nl", "password": "password"},
+        headers={"Accept": "application/json"},
+    )
+    yield session
